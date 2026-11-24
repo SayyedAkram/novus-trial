@@ -1,0 +1,1015 @@
+{
+  "$comment": "Every document the AIRE-Annexus rule files tell the workflow to produce, with the mechanical checks check-docs.cjs applies. Only structure a rule file fixes verbatim is enforced; a document whose rule file gives no template is checked for existence only. `source` cites the rule file and the section or step each entry implements (paths relative to aire-workflow/, except CLAUDE.md at the repository root).",
+  "version": 1,
+  "stages": [
+    { "id": "workspace-detection" },
+    { "id": "reverse-engineering" },
+    { "id": "requirements-analysis" },
+    { "id": "user-stories" },
+    { "id": "dependency-graph" },
+    { "id": "workflow-planning" },
+    { "id": "application-design" },
+    { "id": "functional-design" },
+    { "id": "nfr-requirements" },
+    { "id": "nfr-design" },
+    { "id": "infrastructure-design" },
+    { "id": "stop-checkpoint" },
+    { "id": "ticket-intake" },
+    { "id": "story-run" },
+    { "id": "mid-epic-change" },
+    { "id": "pr-fix" },
+    { "id": "cycle-close" },
+    { "id": "post-merge" },
+    { "id": "automation" }
+  ],
+  "conditions": {
+    "epicCycle": { "section": { "name": "Branching", "re": "Epic Branch:\\s*\\S" } },
+    "bugCycle": { "section": { "name": "Branching", "re": "Bug Branch:\\s*\\S" } },
+    "enhCycle": { "section": { "name": "Branching", "re": "Enhancement Branch:\\s*\\S" } },
+    "ticketCycle": { "any": ["bugCycle", "enhCycle"] },
+    "brownfield": { "section": { "name": "Project Information", "re": "Project Type\\W*\\s*Brownfield" } },
+    "atlasSource": { "section": { "name": "Existing-System Context", "re": "Source\\W*\\s*atlas" } },
+    "localRE": { "section": { "name": "Existing-System Context", "re": "Source\\W*\\s*(local-generation|local-re)" } },
+    "epicProvided": { "section": { "name": "Tracker", "re": "^-\\s*Parent Epic:\\s*(?!none\\b)(?!—)(?!-\\s*$)\\S" } },
+    "appDesignRun": { "file": { "path": "spec/plans/executions.md", "re": "Application Design\\s*-\\s*\\**\\s*EXECUTE" } },
+    "fdRun": { "file": { "path": "spec/plans/executions.md", "re": "Functional Design\\s*-\\s*\\**\\s*EXECUTE" } },
+    "nfrReqRun": { "file": { "path": "spec/plans/executions.md", "re": "NFR Requirements\\s*-\\s*\\**\\s*EXECUTE" } },
+    "nfrDesignRun": { "file": { "path": "spec/plans/executions.md", "re": "NFR Design\\s*-\\s*\\**\\s*EXECUTE" } },
+    "infraRun": { "file": { "path": "spec/plans/executions.md", "re": "Infrastructure Design\\s*-\\s*\\**\\s*EXECUTE" } },
+    "uiuxOn": { "section": { "name": "Extension Configuration", "re": "UI/UX Mockups\\s*\\|\\s*Yes" } },
+    "uiuxGenerate": { "all": ["uiuxOn", { "section": { "name": "UI/UX Design", "re": "Mode\\W*\\s*(generate|provided\\+generate)\\b" } }] },
+    "uiuxSkipped": { "section": { "name": "UI/UX Design", "re": "Mode\\W*\\s*skip\\b|UI/UX Mockups: N/A" } },
+    "activeKey": { "storyKey": "^(story|bug|enhancement)-" },
+    "bugKey": { "storyKey": "^bug-" },
+    "enhKey": { "storyKey": "^enhancement-" },
+    "storyKey": { "storyKey": "^story-" },
+    "autoKey": { "storyKey": "^auto-" },
+    "changeStory": { "exists": "spec/plans/change-story-{N.M}.md" },
+    "bugfixStory": { "exists": "spec/plans/bugfix-story-{N.M}.md" },
+    "plainStory": { "all": ["storyKey", { "not": "changeStory" }, { "not": "bugfixStory" }] }
+  },
+  "docs": {
+    "aire-state": {
+      "title": "runtime-artifacts/aire-state.md",
+      "stage": "workspace-detection",
+      "source": "planning/workspace-detection.md Step 1.5 (no email in state) and Step 4; planning/dependency-graph-generation.md Story Tracker Table Format",
+      "path": "runtime-artifacts/aire-state.md",
+      "cross": ["state-no-identity", "tracker-statuses"]
+    },
+    "state-core": {
+      "title": "aire-state.md core sections",
+      "stage": "workspace-detection",
+      "source": "planning/workspace-detection.md Step 4",
+      "path": "runtime-artifacts/aire-state.md",
+      "noWrite": true,
+      "when": "epicCycle",
+      "headingsAny": ["^# aire State Tracking", "^## Project Information", "^## Workspace State", "^## Stage Progress"]
+    },
+    "state-tracker": {
+      "title": "aire-state.md ## Tracker",
+      "stage": "workspace-detection",
+      "source": "common/tracker-sync.md Section 1 (ADO Project Resolution) and Section 2",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Tracker",
+      "noWrite": true,
+      "patterns": [
+        { "re": "^-\\s*Organization:\\s*\\S", "msg": "## Tracker needs \"- Organization: <org-url>\" (tracker-sync.md Section 1)" },
+        { "re": "^-\\s*Project:\\s*\\S", "msg": "## Tracker needs \"- Project: <project>\" (tracker-sync.md Section 1)" }
+      ]
+    },
+    "state-branching": {
+      "title": "aire-state.md ## Branching",
+      "stage": "workspace-detection",
+      "source": "common/branching-strategy.md Section 1 item 5 and Section 6 item 1",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Branching",
+      "noWrite": true,
+      "patterns": [
+        { "re": "Base Branch:\\s*\\S", "msg": "## Branching needs \"- Base Branch: <branch>\"" },
+        { "re": "Test Plan Folder:\\s*`?test-plans/\\S", "msg": "## Branching needs \"- Test Plan Folder: test-plans/<cycle>/\" (branching-strategy.md Section 7.1)" }
+      ]
+    },
+    "state-context-project": {
+      "title": "aire-state.md ## Context Project",
+      "stage": "workspace-detection",
+      "source": "planning/workspace-detection.md Step 4.7",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Context Project",
+      "noWrite": true,
+      "when": "epicCycle"
+    },
+    "audit": {
+      "title": "runtime-artifacts/audit.md",
+      "stage": "workspace-detection",
+      "source": "common/audit-logging.md Sections 1, 2, 4 and 5",
+      "path": "runtime-artifacts/audit.md",
+      "headings": ["^# Audit Log"],
+      "cross": ["audit-entries"]
+    },
+    "epic-brief": {
+      "title": "spec/plans/epic-brief.md",
+      "stage": "workspace-detection",
+      "source": "common/tracker-sync.md Section 2; planning/workspace-detection.md Step 1.8",
+      "path": "spec/plans/epic-brief.md",
+      "when": "epicProvided",
+      "requires": ["state-tracker"]
+    },
+    "mark-workspace-detection": {
+      "title": "Workspace Detection marked complete",
+      "stage": "workspace-detection",
+      "source": "planning/requirements-analysis.md Step 8; planning/workflow-planning.md Step 8",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Workspace Detection\\b",
+      "requires": ["state-core", "state-tracker", "state-branching", "audit", "epic-brief", "state-context-project"]
+    },
+
+    "atlas-deep-dive": {
+      "title": "spec/plans/atlas-deep-dive.md (from Atlas)",
+      "stage": "reverse-engineering",
+      "source": "common/helix-atlas-integration.md Sections 6 and 7; CLAUDE.md Reverse Engineering",
+      "path": "spec/plans/atlas-deep-dive.md",
+      "when": "atlasSource",
+      "requires": ["state-core"]
+    },
+    "re-business-overview": {
+      "title": "spec/plans/business-overview.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 2",
+      "path": "spec/plans/business-overview.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Business Overview", "^## Business Context Diagram", "^## Business Description", "^## Component Level Business Descriptions"]
+    },
+    "re-architecture": {
+      "title": "spec/plans/atlas-deep-dive.md (generated locally)",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 3",
+      "path": "spec/plans/atlas-deep-dive.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# System Architecture", "^## System Overview", "^## Architecture Diagram", "^## Component Descriptions", "^## Data Flow", "^## Integration Points", "^## Infrastructure Components"]
+    },
+    "re-code-structure": {
+      "title": "spec/plans/code-structure.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 4",
+      "path": "spec/plans/code-structure.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Code Structure", "^## Build System", "^## Key Classes/Modules", "^### Existing Files Inventory", "^## Design Patterns", "^## Critical Dependencies"]
+    },
+    "re-api-documentation": {
+      "title": "spec/plans/api-documentation.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 5",
+      "path": "spec/plans/api-documentation.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# API Documentation", "^## REST APIs", "^## Internal APIs", "^## Data Models"]
+    },
+    "re-component-inventory": {
+      "title": "spec/plans/component-inventory.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 6",
+      "path": "spec/plans/component-inventory.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Component Inventory", "^## Application Packages", "^## Infrastructure Packages", "^## Shared Packages", "^## Test Packages", "^## Total Count"],
+      "patterns": [{ "re": "\\*\\*Total Packages\\*\\*:\\s*\\d+", "msg": "needs \"- **Total Packages**: <n>\"" }]
+    },
+    "re-technology-stack": {
+      "title": "spec/plans/technology-stack.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 7",
+      "path": "spec/plans/technology-stack.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Technology Stack", "^## Programming Languages", "^## Frameworks", "^## Infrastructure", "^## Build Tools", "^## Testing Tools"]
+    },
+    "re-dependencies": {
+      "title": "spec/plans/dependencies.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 8",
+      "path": "spec/plans/dependencies.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Dependencies", "^## Internal Dependencies", "^## External Dependencies"]
+    },
+    "re-code-quality": {
+      "title": "spec/plans/code-quality-assessment.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 9",
+      "path": "spec/plans/code-quality-assessment.md",
+      "when": "localRE",
+      "requires": ["state-core"],
+      "headings": ["^# Code Quality Assessment", "^## Test Coverage", "^## Code Quality Indicators", "^## Technical Debt", "^## Patterns and Anti-patterns"]
+    },
+    "re-timestamp": {
+      "title": "spec/plans/reverse-engineering-timestamp.md",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 10",
+      "path": "spec/plans/reverse-engineering-timestamp.md",
+      "when": "localRE",
+      "requires": ["re-business-overview", "re-architecture", "re-code-structure", "re-api-documentation", "re-component-inventory", "re-technology-stack", "re-dependencies", "re-code-quality"],
+      "headings": ["^# Reverse Engineering Metadata", "^## Artifacts Generated"],
+      "patterns": [{ "re": "\\*\\*Analyzed At Commit\\*\\*:\\s*([0-9a-f]{7,40}|N/A)", "msg": "needs \"**Analyzed At Commit**: <sha>|N/A\"" }],
+      "cross": ["re-files-listed"]
+    },
+    "mark-reverse-engineering": {
+      "title": "Reverse Engineering marked complete",
+      "stage": "reverse-engineering",
+      "source": "planning/reverse-engineering.md Step 11; planning/requirements-analysis.md Step 8",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Reverse Engineering\\b",
+      "requires": ["re-timestamp", "atlas-deep-dive"]
+    },
+
+    "requirement-questions": {
+      "title": "spec/spec-generation/requirement-verification-questions.md",
+      "stage": "requirements-analysis",
+      "source": "planning/requirements-analysis.md Step 6; common/question-format-guide.md",
+      "path": "spec/spec-generation/requirement-verification-questions.md",
+      "optional": true,
+      "requires": ["state-core"],
+      "patterns": [{ "re": "^\\[Answer\\]:", "msg": "no [Answer]: tags" }],
+      "done": {
+        "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag — get the answer before requirements.md is written (requirements-analysis.md Step 6)" }]
+      }
+    },
+    "requirements": {
+      "title": "spec/plans/requirements.md",
+      "stage": "requirements-analysis",
+      "source": "planning/requirements-analysis.md Step 7; common/requirements-traceability.md Rule 1",
+      "path": "spec/plans/requirements.md",
+      "requires": ["state-core", "state-tracker", "requirement-questions"],
+      "patterns": [{ "re": "\\bREQ-F-\\d{2,}\\b", "msg": "no functional requirement IDs (REQ-F-NN) — requirements-traceability.md Rule 1" }]
+    },
+    "mark-requirements-analysis": {
+      "title": "Requirements Analysis marked complete",
+      "stage": "requirements-analysis",
+      "source": "planning/requirements-analysis.md Step 8",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Requirements Analysis\\b",
+      "requires": ["requirements", "requirement-questions"]
+    },
+
+    "team-size-question": {
+      "title": "spec/spec-generation/team-size-question.md",
+      "stage": "user-stories",
+      "source": "planning/user-stories.md Step 1 (pod size)",
+      "path": "spec/spec-generation/team-size-question.md",
+      "optional": true,
+      "when": "epicCycle",
+      "patterns": [{ "re": "^\\[Answer\\]:", "msg": "no [Answer]: tag" }],
+      "done": {
+        "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }]
+      }
+    },
+    "story-generation": {
+      "title": "spec/spec-generation/story-generation.md",
+      "stage": "user-stories",
+      "source": "planning/user-stories.md Steps 2-4 (mandatory number-of-stories question)",
+      "path": "spec/spec-generation/story-generation.md",
+      "when": "epicCycle",
+      "requires": ["requirements"],
+      "patterns": [
+        { "re": "How many user stories should I create for this work\\?", "msg": "missing the mandatory number-of-stories question (user-stories.md Step 3)" },
+        { "re": "Any Design References to be attached in the story\\?", "msg": "missing the mandatory design reference question (user-stories.md Step 3)" }
+      ],
+      "done": {
+        "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }]
+      }
+    },
+    "stories": {
+      "title": "spec/plans/stories.md",
+      "stage": "user-stories",
+      "source": "planning/user-stories.md Steps 16 and 18.5; common/requirements-traceability.md Rules 2 and 3",
+      "path": "spec/plans/stories.md",
+      "when": "epicCycle",
+      "requires": ["requirements", "story-generation"],
+      "patterns": [
+        { "re": "^EPIC TICKET: \\S", "flags": "", "msg": "the first line must be \"EPIC TICKET: <url|ref>\" or \"EPIC TICKET: none (no Parent Epic recorded)\" (user-stories.md Step 16)" },
+        { "re": "\\*\\*Covers\\*\\*:\\s*\\[?`?REQ-(?:F|NF)-\\d{2,}", "msg": "no **Covers**: REQ-... line — every story names the requirements it implements (requirements-traceability.md Rule 2)" },
+        { "re": "\\*\\*Touches\\*\\*:", "msg": "no **Touches**: line — every story lists the paths it will change (user-stories.md Step 16, R6)" }
+      ],
+      "forbid": [{ "re": "\\*\\*Covers\\*\\*:[ \\t]*$", "msg": "a story has an empty **Covers** line" }],
+      "cross": ["covers-ids-exist"],
+      "done": {
+        "headingsAny": ["^#{2,3}\\s+Requirements Coverage Matrix"],
+        "cross": ["req-covered-by-stories"]
+      }
+    },
+    "stories-ticket": {
+      "title": "spec/plans/stories.md (single bug/enhancement story)",
+      "stage": "user-stories",
+      "source": "workflows/bug-fix.md Step 6; workflows/enhancement-implement.md Step 6",
+      "path": "spec/plans/stories.md",
+      "when": "ticketCycle",
+      "requires": ["requirements", "impact-analysis"],
+      "patterns": [{ "re": "\\b1\\.1\\b", "msg": "the single story must be story 1.1 (bug-fix.md Step 6)" }]
+    },
+    "personas": {
+      "title": "spec/plans/personas.md",
+      "stage": "user-stories",
+      "source": "planning/user-stories.md Step 4",
+      "path": "spec/plans/personas.md",
+      "when": "epicCycle",
+      "requires": ["requirements"]
+    },
+    "state-story-tracker": {
+      "title": "aire-state.md ## Story Tracker",
+      "stage": "user-stories",
+      "source": "planning/dependency-graph-generation.md Story Tracker Table Format; planning/user-stories.md Step 17",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Story Tracker",
+      "noWrite": true,
+      "patterns": [{ "re": "^\\|\\s*Story(?: ID)?\\s*\\|\\s*Title\\s*\\|\\s*Requires\\s*\\|\\s*Tracker ID\\s*\\|\\s*Status\\s*\\|", "msg": "table header must start \"| Story | Title | Requires | Tracker ID | Status |\" (dependency-graph-generation.md Story Tracker Table Format)" }],
+      "cross": ["tracker-statuses"]
+    },
+    "mark-story-tracker": {
+      "title": "Story Tracker created",
+      "stage": "user-stories",
+      "source": "workflows/bug-fix.md Step 6 item 2; workflows/enhancement-implement.md Step 6 item 2",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^#{2}\\s+Story Tracker\\b",
+      "requires": ["stories-ticket"]
+    },
+    "mark-user-stories": {
+      "title": "User Stories marked complete",
+      "stage": "user-stories",
+      "source": "planning/user-stories.md (Mark User Stories stage complete); planning/workflow-planning.md Step 8",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*User Stories\\b",
+      "requires": ["stories", "personas", "story-generation", "state-story-tracker", "stories-ticket"]
+    },
+
+    "dependency-graph": {
+      "title": "spec/plans/dependency-graph.yml",
+      "stage": "dependency-graph",
+      "source": "planning/dependency-graph-generation.md Execution Steps 5 and the dependency-graph.yml Schema",
+      "path": "spec/plans/dependency-graph.yml",
+      "parse": "yaml",
+      "when": "epicCycle",
+      "requires": ["stories", "personas", "state-story-tracker"],
+      "patterns": [
+        { "re": "^version:\\s*1\\b", "msg": "needs \"version: 1\"" },
+        { "re": "^team_size:\\s*\\d+", "msg": "needs \"team_size: <n>\"" },
+        { "re": "^stories:", "msg": "needs a \"stories:\" list" }
+      ],
+      "cross": ["graph-matches-tracker"]
+    },
+    "state-dependency-graph": {
+      "title": "aire-state.md ## Dependency Graph",
+      "stage": "dependency-graph",
+      "source": "planning/dependency-graph-generation.md Execution Step 6",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Dependency Graph",
+      "noWrite": true,
+      "when": "epicCycle",
+      "patterns": [{ "re": "```mermaid\\s*\\n\\s*graph\\s+TD", "msg": "needs a ```mermaid graph TD block" }]
+    },
+
+    "executions": {
+      "title": "spec/plans/executions.md",
+      "stage": "workflow-planning",
+      "source": "planning/workflow-planning.md Step 7; workflows/bug-fix.md Step 7; workflows/enhancement-implement.md Step 7",
+      "path": "spec/plans/executions.md",
+      "requires": ["requirements", "stories", "dependency-graph", "stories-ticket"],
+      "headings": ["^# Execution Plan", "^## Detailed Analysis Summary", "^### Change Impact Assessment", "^### Risk Assessment", "^## Workflow Visualization", "^## Phases to Execute", "^### PLANNING PHASE", "^### IMPLEMENTATION PHASE", "^## Success Criteria"],
+      "patterns": [
+        { "re": "```mermaid\\s*\\n\\s*flowchart\\s+TD", "msg": "needs the ```mermaid flowchart TD workflow visualization" },
+        { "re": "Application Design\\s*-\\s*\\**\\s*(EXECUTE|SKIP)", "msg": "no \"Application Design - EXECUTE|SKIP\" line" }
+      ]
+    },
+    "mark-workflow-planning": {
+      "title": "Workflow Planning marked complete",
+      "stage": "workflow-planning",
+      "source": "planning/workflow-planning.md Step 8",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Workflow Planning\\b",
+      "requires": ["executions", "state-dependency-graph"]
+    },
+
+    "application-design-plan": {
+      "title": "spec/spec-generation/application-design-generation.md",
+      "stage": "application-design",
+      "source": "planning/application-design.md (plan with [Answer]: tags)",
+      "path": "spec/spec-generation/application-design-generation.md",
+      "when": "appDesignRun",
+      "requires": ["executions"],
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "application-design": {
+      "title": "spec/plans/application-design.md",
+      "stage": "application-design",
+      "source": "planning/application-design.md (consolidated application-design.md)",
+      "path": "spec/plans/application-design.md",
+      "when": "appDesignRun",
+      "requires": ["executions", "application-design-plan"]
+    },
+    "mark-application-design": {
+      "title": "Application Design marked complete",
+      "stage": "application-design",
+      "source": "planning/application-design.md (Mark Application Design stage complete)",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Application Design\\b",
+      "requires": ["application-design"]
+    },
+
+    "functional-design-plan": {
+      "title": "spec/spec-generation/functional-design-generation.md",
+      "stage": "functional-design",
+      "source": "implementation/functional-design.md (plan with [Answer]: tags)",
+      "path": "spec/spec-generation/functional-design-generation.md",
+      "when": "fdRun",
+      "requires": ["executions", "application-design"],
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "functional-design": {
+      "title": "spec/plans/functional-design.md",
+      "stage": "functional-design",
+      "source": "implementation/functional-design.md (Create spec/plans/functional-design.md)",
+      "path": "spec/plans/functional-design.md",
+      "when": "fdRun",
+      "requires": ["functional-design-plan"]
+    },
+    "mark-functional-design": {
+      "title": "Functional Design marked complete",
+      "stage": "functional-design",
+      "source": "implementation/functional-design.md (Mark Functional Design stage complete)",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Functional Design\\b",
+      "requires": ["functional-design"]
+    },
+
+    "nfr-requirements-plan": {
+      "title": "spec/spec-generation/nfr-requirements-generation.md",
+      "stage": "nfr-requirements",
+      "source": "implementation/nfr-requirements.md (plan file)",
+      "path": "spec/spec-generation/nfr-requirements-generation.md",
+      "when": "nfrReqRun",
+      "requires": ["executions", "functional-design"],
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "nfr": {
+      "title": "spec/plans/nfr.md",
+      "stage": "nfr-requirements",
+      "source": "implementation/nfr-requirements.md (nfr.md with a ## NFR Requirements section)",
+      "path": "spec/plans/nfr.md",
+      "when": "nfrReqRun",
+      "requires": ["nfr-requirements-plan"],
+      "headings": ["^## NFR Requirements\\s*$"]
+    },
+    "mark-nfr-requirements": {
+      "title": "NFR Requirements marked complete",
+      "stage": "nfr-requirements",
+      "source": "implementation/nfr-requirements.md (Mark NFR Requirements stage complete)",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*NFR Requirements\\b",
+      "requires": ["nfr"]
+    },
+
+    "nfr-design-plan": {
+      "title": "spec/spec-generation/nfr-design-generation.md",
+      "stage": "nfr-design",
+      "source": "implementation/nfr-design.md (plan file)",
+      "path": "spec/spec-generation/nfr-design-generation.md",
+      "when": "nfrDesignRun",
+      "requires": ["nfr"],
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "nfr-design-section": {
+      "title": "spec/plans/nfr.md ## NFR Design",
+      "stage": "nfr-design",
+      "source": "implementation/nfr-design.md (append a ## NFR Design section to nfr.md)",
+      "path": "spec/plans/nfr.md",
+      "section": "NFR Design",
+      "noWrite": true,
+      "when": "nfrDesignRun"
+    },
+    "mark-nfr-design": {
+      "title": "NFR Design marked complete",
+      "stage": "nfr-design",
+      "source": "implementation/nfr-design.md (Mark NFR Design stage complete)",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*NFR Design\\b",
+      "requires": ["nfr-design-plan", "nfr-design-section"]
+    },
+
+    "infrastructure-design-plan": {
+      "title": "spec/spec-generation/infrastructure-design-generation.md",
+      "stage": "infrastructure-design",
+      "source": "implementation/infrastructure-design.md (plan file)",
+      "path": "spec/spec-generation/infrastructure-design-generation.md",
+      "when": "infraRun",
+      "requires": ["executions", "functional-design", "nfr"],
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "infrastructure-design": {
+      "title": "spec/plans/infrastructure-design.md",
+      "stage": "infrastructure-design",
+      "source": "implementation/infrastructure-design.md (Create spec/plans/infrastructure-design.md)",
+      "path": "spec/plans/infrastructure-design.md",
+      "when": "infraRun",
+      "requires": ["infrastructure-design-plan"]
+    },
+    "mark-infrastructure-design": {
+      "title": "Infrastructure Design marked complete",
+      "stage": "infrastructure-design",
+      "source": "implementation/infrastructure-design.md (Mark Infrastructure Design stage complete)",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^\\s*-\\s*\\[x\\]\\s*Infrastructure Design\\b",
+      "requires": ["infrastructure-design"]
+    },
+    "coverage-verified": {
+      "title": "aire-state.md post-design coverage line",
+      "stage": "infrastructure-design",
+      "source": "common/requirements-traceability.md Rule 4; implementation/infrastructure-design.md",
+      "path": "runtime-artifacts/aire-state.md",
+      "noWrite": true,
+      "when": "epicCycle",
+      "patterns": [{ "re": "Requirements coverage verified post-design: (\\d+)/\\1 REQ-IDs", "msg": "needs \"Requirements coverage verified post-design: R/R REQ-IDs — <timestamp>\" with full coverage" }]
+    },
+    "mark-coverage-verified": {
+      "title": "Post-design coverage recorded",
+      "stage": "infrastructure-design",
+      "source": "common/requirements-traceability.md Rule 4",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "Requirements coverage verified post-design:",
+      "requires": ["stories", "functional-design", "nfr", "infrastructure-design", "application-design", "stories-ticket"]
+    },
+
+    "package-dependencies": {
+      "title": "spec/plans/package-dependencies.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/package-dependencies-doc.md Section 4; CLAUDE.md MANDATORY STOP Step 1.0; workflows/bug-fix.md Step 8.5 item 1.5",
+      "path": "spec/plans/package-dependencies.md",
+      "requires": ["executions", "stories", "stories-ticket", "application-design", "functional-design", "nfr", "infrastructure-design"],
+      "headings": ["^# Package Dependencies — \\S", "^>\\s*\\*\\*Version\\*\\*:", "^## 1\\. Runtimes and tools", "^## 2\\. Packages", "^## 3\\. Install commands"]
+    },
+    "architecture": {
+      "title": "spec/plans/architecture.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/architecture-doc.md Sections 1, 2 and 2.1; CLAUDE.md MANDATORY STOP Step 1.1",
+      "path": "spec/plans/architecture.md",
+      "requires": ["package-dependencies", "executions", "application-design", "functional-design", "nfr", "infrastructure-design", "coverage-verified"],
+      "headings": ["^# Architecture — \\S", "^>\\s*\\*\\*Version\\*\\*:\\s*v?\\d+\\.\\d+\\.\\d+", "^>\\s*\\*\\*Derived from\\*\\*:", "^## 1\\. System Context", "^## 2\\. Component Inventory", "^## 3\\. Layering and Boundaries", "^## 4\\. Data Architecture", "^## 5\\. API and Integration Contracts", "^## 6\\. Cross-Cutting Decisions", "^## 7\\. Non-Functional Targets", "^## 8\\. Infrastructure and Deployment", "^## 10\\. Explicitly Out of Scope"],
+      "cross": ["architecture-diagrams", "architecture-derived-from"]
+    },
+    "architecture-delta-section": {
+      "title": "architecture.md ## 9. Delta from the Existing System",
+      "stage": "stop-checkpoint",
+      "source": "implementation/architecture-doc.md Section 2 (brownfield only)",
+      "path": "spec/plans/architecture.md",
+      "section": "9. Delta from the Existing System",
+      "noWrite": true,
+      "when": { "all": ["brownfield", { "exists": "spec/plans/architecture.md" }] }
+    },
+    "judge-rubrics": {
+      "title": "spec/plans/judge-rubrics.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/architecture-doc.md Section 6; workflows/bug-fix.md Step 8.5 item 2",
+      "path": "spec/plans/judge-rubrics.md",
+      "requires": ["architecture"],
+      "headings": ["^# Judge Rubrics", "^>\\s*Rubric version:\\s*\\S", "^## J1\\b", "^## J2\\b"],
+      "cross": ["judge-rubrics-match"]
+    },
+    "ui-ux-questions": {
+      "title": "spec/spec-generation/ui-ux-design-questions.md",
+      "stage": "stop-checkpoint",
+      "source": "extensions/design/ui-ux/ui-ux-mockups.md Step 2 (design questions)",
+      "path": "spec/spec-generation/ui-ux-design-questions.md",
+      "optional": true,
+      "when": "uiuxOn",
+      "skipWhen": "uiuxSkipped",
+      "done": { "forbid": [{ "re": "^\\[Answer\\]:[ \\t]*$", "msg": "has an unanswered [Answer]: tag" }] }
+    },
+    "ui-ux-screens": {
+      "title": "spec/plans/ui-ux/SCR-*.html",
+      "stage": "stop-checkpoint",
+      "source": "extensions/design/ui-ux/ui-ux-mockups.md Step 3 (rules for every screen file)",
+      "path": "spec/plans/ui-ux/SCR-*.html",
+      "parse": "html",
+      "when": "uiuxGenerate",
+      "skipWhen": "uiuxSkipped",
+      "requires": ["ui-ux-questions"],
+      "cross": ["mockups-self-contained"]
+    },
+    "ui-ux-index": {
+      "title": "spec/plans/ui-ux/index.html",
+      "stage": "stop-checkpoint",
+      "source": "extensions/design/ui-ux/ui-ux-mockups.md Step 3",
+      "path": "spec/plans/ui-ux/index.html",
+      "parse": "html",
+      "when": "uiuxGenerate",
+      "skipWhen": "uiuxSkipped"
+    },
+    "ui-ux-design": {
+      "title": "spec/plans/ui-ux-design.md",
+      "stage": "stop-checkpoint",
+      "source": "extensions/design/ui-ux/ui-ux-mockups.md Step 3 (screen inventory)",
+      "path": "spec/plans/ui-ux-design.md",
+      "when": "uiuxGenerate",
+      "skipWhen": "uiuxSkipped",
+      "requires": ["stories", "stories-ticket"]
+    },
+    "test-plan-per-story": {
+      "title": "a test-plan folder for every story",
+      "stage": "stop-checkpoint",
+      "source": "implementation/test-plans-checkpoint.md Section 3.1 item 2; common/branching-strategy.md Section 7.1",
+      "path": "test-plans/",
+      "perStory": true,
+      "noWrite": true,
+      "when": "epicCycle",
+      "cross": ["test-plan-folder"]
+    },
+    "test-plan-summary": {
+      "title": "test-plans/<cycle>/<TICKET-ID>-<title>/test-plan-summary.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/test-plan.md Output Location and Step 5",
+      "paths": ["test-plans/*/*/test-plan-summary.md", "test-plans/*/test-plan-summary.md"],
+      "requires": ["stories", "stories-ticket"],
+      "headings": ["^# Test Plan Summary — ", "^## Applicable Test Plans", "^## Acceptance Criteria → Test Case Coverage", "^## Execution Record", "^## Open Questions"],
+      "done": {
+        "patterns": [{ "re": "\\*\\*Coverage check\\*\\*: (\\d+)/\\1 acceptance criteria have at least one test case", "msg": "the **Coverage check** line is not n/n — every acceptance criterion needs a test case (test-plan.md Step 5)" }]
+      }
+    },
+    "test-plan-steps": {
+      "title": "test-plans/<cycle>/<TICKET-ID>-<title>/<plan>-test-steps.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/test-plan.md Steps 3 and 4",
+      "paths": ["test-plans/*/*/*-test-steps.md", "test-plans/*/*-test-steps.md"],
+      "optional": true,
+      "requires": ["stories", "stories-ticket"],
+      "headings": ["^## System Under Test"],
+      "patterns": [{ "re": "^### TC-[A-Z0-9]+-\\d{2} — \\S", "msg": "no \"### TC-<PLAN>-<nn> — <title>\" test case (test-plan.md Step 3)" }]
+    },
+    "state-test-plans": {
+      "title": "aire-state.md ## Test Plans",
+      "stage": "stop-checkpoint",
+      "source": "implementation/test-plans-checkpoint.md Section 6",
+      "path": "runtime-artifacts/aire-state.md",
+      "section": "Test Plans",
+      "noWrite": true,
+      "when": "epicCycle",
+      "patterns": [{ "re": "AC coverage\\*\\*:\\s*(\\d+)/\\1\\b", "msg": "needs \"- **AC coverage**: A/A\" with full coverage (test-plans-checkpoint.md Section 3.1)" }]
+    },
+    "mark-test-plans": {
+      "title": "Test plans recorded in aire-state.md",
+      "stage": "stop-checkpoint",
+      "source": "implementation/test-plans-checkpoint.md Sections 0, 3.1 and 6",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "^#{2}\\s+Test Plans\\b",
+      "requires": ["test-plan-per-story", "test-plan-summary", "ui-ux-screens", "ui-ux-index", "ui-ux-design"]
+    },
+    "mark-design-complete": {
+      "title": "Design complete recorded",
+      "stage": "stop-checkpoint",
+      "source": "CLAUDE.md MANDATORY STOP Step 2; workflows/bug-fix.md Step 9",
+      "path": "runtime-artifacts/aire-state.md",
+      "marker": "Design complete — awaiting",
+      "requires": ["package-dependencies", "architecture", "architecture-delta-section", "judge-rubrics", "test-plan-per-story", "test-plan-summary", "state-test-plans", "ui-ux-screens", "ui-ux-index", "ui-ux-design"]
+    },
+
+    "bug-brief": {
+      "title": "spec/plans/bug-brief.md",
+      "stage": "ticket-intake",
+      "source": "workflows/bug-fix.md Step 1",
+      "path": "spec/plans/bug-brief.md",
+      "when": "bugCycle",
+      "requires": ["state-tracker"]
+    },
+    "enhancement-brief": {
+      "title": "spec/plans/enhancement-brief.md",
+      "stage": "ticket-intake",
+      "source": "workflows/enhancement-implement.md Step 1",
+      "path": "spec/plans/enhancement-brief.md",
+      "when": "enhCycle",
+      "requires": ["state-tracker"]
+    },
+    "impact-analysis": {
+      "title": "spec/plans/impact-analysis.md",
+      "stage": "ticket-intake",
+      "source": "workflows/bug-fix.md Step 5 item 2; workflows/enhancement-implement.md Step 5 item 2",
+      "path": "spec/plans/impact-analysis.md",
+      "when": "ticketCycle",
+      "requires": ["bug-brief", "enhancement-brief"],
+      "headings": ["^# Impact Analysis — ", "^## Affected Files", "^## Blast Radius"],
+      "patterns": [{ "re": "^\\|\\s*File\\s*\\|\\s*Why it must change\\s*\\|", "msg": "the Affected Files table must start \"| File | Why it must change |\"" }]
+    },
+
+    "story-state": {
+      "title": "runtime-artifacts/stories/<story-key>/state.md",
+      "stage": "story-run",
+      "source": "common/parallel-work-state.md Sections 3.2 and 5; common/story-artifacts.md E4",
+      "path": "runtime-artifacts/stories/{key}/state.md",
+      "scope": "story",
+      "when": "activeKey",
+      "headings": ["^# Story State — "],
+      "cross": ["tracker-statuses"],
+      "done": { "headings": ["^## Story Tracker Row", "^## Claim"] }
+    },
+    "story-audit": {
+      "title": "runtime-artifacts/stories/<story-key>/audit.md",
+      "stage": "story-run",
+      "source": "common/parallel-work-state.md Section 3.1; common/audit-logging.md",
+      "path": "runtime-artifacts/stories/{key}/audit.md",
+      "scope": "story",
+      "headings": ["^# Audit Trail — "],
+      "cross": ["audit-entries"]
+    },
+    "baseline-regression": {
+      "title": "reports/unit-test-evidence/<story-key>/baseline-regression.log",
+      "stage": "story-run",
+      "source": "workflows/dev-implement.md Step 1.5 item 4.5; workflows/bug-fix-implement.md Step 3; workflows/enhancement-implement.md Step 10; common/story-artifacts.md E1",
+      "path": "reports/unit-test-evidence/{key}/baseline-regression.log",
+      "scope": "story",
+      "when": "activeKey",
+      "requires": ["story-state"]
+    },
+    "story-plan": {
+      "title": "spec/spec-generation/story-N.M-code-generation.md",
+      "stage": "story-run",
+      "source": "implementation/code-generation.md Steps 2 and 4; workflows/dev-implement.md Code Generation item 4.1",
+      "path": "spec/spec-generation/story-{N.M}-code-generation.md",
+      "scope": "story",
+      "when": "plainStory",
+      "requires": ["story-state", "baseline-regression"],
+      "prereqLevel": "shape",
+      "patterns": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[[ xX]\\]", "msg": "no checkbox steps (- [ ] / - [x]) — code-generation.md Step 2" }],
+      "done": {
+        "forbid": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[ \\]", "msg": "has unchecked plan steps — mark each finished step [x] (CLAUDE.md Plan-Level Checkbox Enforcement)" }]
+      }
+    },
+    "bug-plan": {
+      "title": "spec/spec-generation/Bug-generation.md",
+      "stage": "story-run",
+      "source": "workflows/bug-fix-implement.md Step 4",
+      "path": "spec/spec-generation/Bug-generation.md",
+      "when": "bugKey",
+      "requires": ["bug-brief", "impact-analysis", "baseline-regression"],
+      "prereqLevel": "shape",
+      "patterns": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[[ xX]\\]", "msg": "no checkbox steps" }],
+      "done": { "forbid": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[ \\]", "msg": "has unchecked plan steps" }] }
+    },
+    "enhancement-plan": {
+      "title": "spec/spec-generation/enhancement-generation.md",
+      "stage": "story-run",
+      "source": "workflows/enhancement-implement.md Step 11",
+      "path": "spec/spec-generation/enhancement-generation.md",
+      "when": "enhKey",
+      "requires": ["enhancement-brief", "impact-analysis", "baseline-regression"],
+      "prereqLevel": "shape",
+      "patterns": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[[ xX]\\]", "msg": "no checkbox steps" }],
+      "done": { "forbid": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[ \\]", "msg": "has unchecked plan steps" }] }
+    },
+    "code": {
+      "title": "application code and tests",
+      "stage": "story-run",
+      "source": "workflows/dev-implement.md Step 1.5 item 4.5 and Code Generation item 4.1 (baseline and plan before any code); common/directory-structure.md (src/ or ## Code Root, tests/unit/, tests/api/)",
+      "codeRoot": true,
+      "alsoPaths": ["tests/unit/**", "tests/api/**"],
+      "scope": "story",
+      "when": "activeKey",
+      "requires": ["story-plan", "bug-plan", "enhancement-plan", "change-story-doc", "bugfix-story-doc", "baseline-regression"]
+    },
+    "unit-test-run": {
+      "title": "reports/unit-test-evidence/<story-key>/unit-test-run.log",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E1; implementation/code-generation.md Step 11a",
+      "path": "reports/unit-test-evidence/{key}/unit-test-run.log",
+      "scope": "story",
+      "when": "activeKey",
+      "requires": ["baseline-regression"]
+    },
+    "full-regression": {
+      "title": "reports/unit-test-evidence/<story-key>/full-regression.log",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E1; implementation/code-generation.md Step 11c",
+      "path": "reports/unit-test-evidence/{key}/full-regression.log",
+      "scope": "story",
+      "when": "activeKey",
+      "requires": ["baseline-regression"]
+    },
+    "changed-lines-coverage": {
+      "title": "reports/unit-test-evidence/<story-key>/coverage/changed-lines-coverage.json",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md Section 2.1",
+      "path": "reports/unit-test-evidence/{key}/coverage/changed-lines-coverage.json",
+      "scope": "story",
+      "when": "activeKey",
+      "parse": "json",
+      "jsonKeys": ["key", "base", "threshold", "files", "lineCoverage", "status"],
+      "cross": ["coverage-matches-eval"]
+    },
+    "unit-evidence-manifest": {
+      "title": "reports/unit-test-evidence/<story-key>/evidence-manifest.md",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E1 and Section 2",
+      "path": "reports/unit-test-evidence/{key}/evidence-manifest.md",
+      "scope": "story",
+      "when": "activeKey",
+      "headings": ["^# Evidence Manifest — ", "^## Commands run", "^## Tools", "^## Result", "^## Artifacts"],
+      "patterns": [{ "re": "^\\|\\s*Status\\s*\\|\\s*(PASS|FAIL|ERROR|N/A)\\b", "msg": "the field table needs a \"| Status | PASS|FAIL|ERROR|N/A |\" row" }]
+    },
+    "api-contract-manifest": {
+      "title": "reports/api-contract-test-evidence/<story-key>/evidence-manifest.md",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E6; implementation/code-generation.md Step 11a.5",
+      "path": "reports/api-contract-test-evidence/{key}/evidence-manifest.md",
+      "scope": "story",
+      "when": "activeKey"
+    },
+    "eval-json": {
+      "title": "reports/eval-evidence/<story-key>/eval.json",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E7; implementation/code-generation.md Step 11c.7",
+      "path": "reports/eval-evidence/{key}/eval.json",
+      "scope": "story",
+      "when": "activeKey",
+      "parse": "json",
+      "jsonKeys": ["key", "results", "verdict"],
+      "cross": ["eval-consistency"]
+    },
+    "eval-summary": {
+      "title": "reports/eval-evidence/<story-key>/eval-summary.md",
+      "stage": "story-run",
+      "source": "common/story-artifacts.md E7 (eval-summary.md); implementation/code-generation.md Step 11c.7",
+      "path": "reports/eval-evidence/{key}/eval-summary.md",
+      "scope": "story",
+      "when": "activeKey",
+      "requires": ["eval-json"],
+      "headings": ["^###\\s*Eval Scorecard\\b"],
+      "patterns": [{ "re": "^\\|\\s*Check\\s*\\|\\s*Result\\s*\\|\\s*Threshold\\s*\\|\\s*Status\\s*\\|", "msg": "the table header must be \"| Check | Result | Threshold | Status |\"" }],
+      "cross": ["summary-matches-eval"]
+    },
+    "code-review": {
+      "title": "reports/reviews/<story-key>-code-review-v<X>.md",
+      "stage": "story-run",
+      "source": "implementation/code-review.md Phase 3 and Code Review Report Template; common/story-artifacts.md E2",
+      "path": "reports/reviews/{key}-code-review-v{any}.md",
+      "scope": "story",
+      "headings": ["^# Code Review - ", "^## Review Summary", "^## AC & Requirements Verification", "^## Issues Found", "^## Issue Summary", "^## Approval Status"],
+      "patterns": [{ "re": "^\\*\\*Status\\*\\*:[^A-Za-z\\n]*(APPROVED WITH COMMENTS|APPROVED|CHANGES REQUESTED)\\b", "msg": "**Status** must be APPROVED / APPROVED WITH COMMENTS / CHANGES REQUESTED" }],
+      "cross": ["review-versions"]
+    },
+    "ticket-summary": {
+      "title": "reports/ticket-summary/bug-<TICKET-ID>-summary.md",
+      "stage": "story-run",
+      "source": "workflows/bug-fix-implement.md Steps 3 and 7; common/story-artifacts.md E5",
+      "path": "reports/ticket-summary/{key}-summary.md",
+      "scope": "story",
+      "when": "bugKey",
+      "headingsAny": ["^## Baseline Regression"],
+      "done": { "headingsAny": ["^## Full Regression"] }
+    },
+
+    "change-story-doc": {
+      "title": "spec/plans/change-story-N.M.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-enhancement.md Step 6 and Step 10",
+      "path": "spec/plans/change-story-{N.M}.md",
+      "scope": "story",
+      "when": "changeStory",
+      "requires": ["stories"],
+      "prereqLevel": "shape",
+      "headings": ["^# Change Story \\d+\\.\\d+ — ", "^## 1\\. The change", "^## 2\\. Impact — code", "^## 3\\. Impact — stories and acceptance criteria", "^## 4\\. The change story", "^## 5\\. Test impact", "^## 6\\. Implementation plan", "^## 7\\. Tracker and state actions on approval", "^## 8\\. Warnings", "^## 9\\. Decisions & assumptions", "^## 10\\. Revision log"],
+      "done": { "forbid": [{ "re": "^\\s*-\\s*\\[ \\]\\s*Step", "msg": "Section 6 has unchecked plan steps" }] }
+    },
+    "change-spec-doc": {
+      "title": "spec/plans/change-spec-X.Y.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-enhancement.md Steps 4 and 6 (spec-only path, same template)",
+      "path": "spec/plans/change-spec-{any}.md",
+      "optional": true,
+      "requires": ["stories"],
+      "headings": ["^# Change \\w+ \\d+\\.\\d+ — ", "^## 1\\. The change", "^## 3\\. Impact — stories and acceptance criteria", "^## 10\\. Revision log"]
+    },
+    "bugfix-story-doc": {
+      "title": "spec/plans/bugfix-story-N.M.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-bugfix.md Step 8",
+      "path": "spec/plans/bugfix-story-{N.M}.md",
+      "scope": "story",
+      "when": "bugfixStory",
+      "requires": ["stories"],
+      "prereqLevel": "shape",
+      "headings": ["^# Bugfix Story \\d+\\.\\d+ — ", "^## 1\\. The defect", "^## 2\\. Reproduction", "^## 3\\. Root cause and blast radius", "^## 4\\. Impact — stories and acceptance criteria", "^## 5\\. The bugfix story", "^## 6\\. AI-origin", "^## 7\\. Test impact", "^## 8\\. Fix plan", "^## 9\\. Tracker and state actions on approval", "^## 10\\. Decisions & assumptions"],
+      "done": { "forbid": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[ \\]", "msg": "Section 8 has unchecked fix-plan steps" }] }
+    },
+    "cr-change-request": {
+      "title": "spec/plans/change-requests/CR-<n>/change-request.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-change-request.md CR bundle Format 1",
+      "path": "spec/plans/change-requests/CR-{any}/change-request.md",
+      "optional": true,
+      "requires": ["requirements", "stories"],
+      "headings": ["^# CR-\\d+ — ", "^## 1\\. The change", "^## 2\\. Requirements — delta and versions", "^## 3\\. Impact — stories, acceptance criteria and tests", "^## 4\\. Resolution — what this CR does", "^## 5\\. Test impact", "^## 6\\. Implementation plan", "^## 7\\. Tracker, state and dependency actions on approval", "^## 8\\. Warnings", "^## 9\\. Decisions & assumptions", "^## 10\\. Revision log"]
+    },
+    "cr-requirements-delta": {
+      "title": "spec/plans/change-requests/CR-<n>/requirements-delta.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-change-request.md CR bundle Format 2; common/requirement-versioning.md",
+      "path": "spec/plans/change-requests/CR-{any}/requirements-delta.md",
+      "optional": true,
+      "requires": ["requirements"],
+      "headings": ["^# CR-\\d+ — Requirements Delta", "^## Summary", "^## AMENDED", "^## ADDED", "^## SUPERSEDED", "^## Coverage matrix after this CR", "^## Version self-check"],
+      "forbid": [{ "re": "^## ADDED\\b(?:(?!^## )[\\s\\S])*?^###\\s+REQ-(?:F|NF)-\\d+@v1\\b", "msg": "an ADDED requirement is unversioned, never @v1 (requirement-versioning.md, RV-3)" }]
+    },
+    "cr-impact-ledger": {
+      "title": "spec/plans/change-requests/CR-<n>/impact-ledger.md",
+      "stage": "mid-epic-change",
+      "source": "workflows/epic-change-request.md CR bundle Format 3",
+      "path": "spec/plans/change-requests/CR-{any}/impact-ledger.md",
+      "optional": true,
+      "requires": ["stories"],
+      "headings": ["^# CR-\\d+ — Impact Ledger", "^## 1\\. Requirement → story", "^## 2\\. Story → acceptance criteria", "^## 3\\. Story → code", "^## 4\\. Story → tests", "^## 5\\. State and routing input", "^## 6\\. Concurrency", "^## 7\\. Impact tags", "^## 8\\. Unresolved"]
+    },
+
+    "pr-feedback-ledger": {
+      "title": "reports/pr-feedback/<story-key>/round-<R>/feedback-ledger.md",
+      "stage": "pr-fix",
+      "source": "workflows/pr-fix.md Step 5 (classes and ledger)",
+      "path": "reports/pr-feedback/{key}/round-{any}/feedback-ledger.md",
+      "scope": "story",
+      "headings": ["^# Feedback Ledger — PR #\\d+"],
+      "patterns": [{ "re": "^\\|\\s*ID\\s*\\|\\s*Source\\s*\\|\\s*Author\\s*\\|\\s*Where\\s*\\|", "msg": "the ledger table must start \"| ID | Source | Author | Where |\"" }],
+      "forbid": [{ "re": "^\\|\\s*FB-\\d{2}\\s*\\|(?:[^|]*\\|){4}\\s*(?!FIX-CODE|FIX-TEST|AMEND-AC|CONFLICT|ANSWER|DECLINE|DEFER|ALREADY-ADDRESSED)[A-Z][^|]*\\|", "msg": "a row's Class is not one of FIX-CODE, FIX-TEST, AMEND-AC, CONFLICT, ANSWER, DECLINE, DEFER, ALREADY-ADDRESSED" }]
+    },
+    "pr-fix-plan": {
+      "title": "spec/spec-generation/<story-key>-pr-fix-round-<R>.md",
+      "stage": "pr-fix",
+      "source": "workflows/pr-fix.md Step 9",
+      "path": "spec/spec-generation/{key}-pr-fix-round-{any}.md",
+      "scope": "story",
+      "requires": ["pr-feedback-ledger"],
+      "prereqLevel": "shape",
+      "patterns": [{ "re": "FB-\\d{2}", "msg": "no step is tagged with its FB-NN feedback item" }],
+      "done": { "forbid": [{ "re": "^\\s*(?:[-*+]|\\d+[.)])\\s*\\[ \\]", "msg": "has unchecked plan steps" }] }
+    },
+    "pr-resolution-summary": {
+      "title": "reports/pr-feedback/<story-key>/round-<R>/resolution-summary.md",
+      "stage": "pr-fix",
+      "source": "workflows/pr-fix.md (resolution summary)",
+      "path": "reports/pr-feedback/{key}/round-{any}/resolution-summary.md",
+      "scope": "story",
+      "requires": ["pr-feedback-ledger", "pr-fix-plan"]
+    },
+
+    "re-delta": {
+      "title": "spec/plans/delta/<CYCLE-ID>-<slug>/delta.md",
+      "stage": "cycle-close",
+      "source": "agents/archive-epic-agent.md (RE delta format)",
+      "paths": ["spec/plans/delta/{any}/delta.md", "aire-archives/{epics,bugs,enhancements}/{any}/spec/plans/delta/{any}/delta.md"],
+      "optional": true,
+      "headings": ["^# RE Delta — ", "^## Summary", "^## Changed Surfaces", "^## Impacted Deep-Dive Areas", "^## Resolved", "^## Notes"],
+      "patterns": [{ "re": "^>\\s*\\*\\*Commit range\\*\\*:\\s*[0-9a-f]{7,40}\\.\\.[0-9a-f]{7,40}", "msg": "needs \"> **Commit range**: <sha>..<sha>\"" }],
+      "forbid": [{ "re": "\\b(old_string|new_string)\\b", "msg": "a delta records changes, never find/replace payloads (archive-epic-agent.md)" }]
+    },
+    "archive-manifest": {
+      "title": "aire-archives/<type>/<ID>-<slug>/archive-manifest.md",
+      "stage": "cycle-close",
+      "source": "agents/archive-epic-agent.md Step 5.4",
+      "path": "aire-archives/{epics,bugs,enhancements}/{any}/archive-manifest.md",
+      "optional": true,
+      "requires": ["re-delta"],
+      "headings": ["^# Cycle Archive Manifest"],
+      "patterns": [
+        { "re": "^-\\s*\\*\\*Cycle\\*\\*:", "msg": "needs \"- **Cycle**:\"" },
+        { "re": "^-\\s*\\*\\*Archived\\*\\*:\\s*\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})", "msg": "needs \"- **Archived**: <ISO 8601>\"" }
+      ]
+    },
+    "stitch-ledger": {
+      "title": "aire-archives/stitch-ledger.md",
+      "stage": "post-merge",
+      "source": "agents/stitch-delta-agent.md (the stitch ledger)",
+      "path": "aire-archives/stitch-ledger.md",
+      "optional": true,
+      "headings": ["^# Stitch Ledger — "],
+      "patterns": [{ "re": "^\\|\\s*Cycle\\s*\\|\\s*Ticket\\s*\\|\\s*Delta Folder\\s*\\|\\s*Stitched At\\s*\\|", "msg": "the table header must start \"| Cycle | Ticket | Delta Folder | Stitched At |\"" }],
+      "cross": ["ledger-unique-delta"]
+    },
+    "local-re-ledger": {
+      "title": "aire-archives/local-re/stitch-ledger.md",
+      "stage": "post-merge",
+      "source": "agents/stitch-delta-local-agent.md Step 2 item 1",
+      "path": "aire-archives/local-re/stitch-ledger.md",
+      "optional": true,
+      "headings": ["^# Local RE Stitch Ledger — "],
+      "patterns": [{ "re": "^\\|\\s*Cycle\\s*\\|\\s*Ticket\\s*\\|\\s*Delta Folder\\s*\\|\\s*Stitched At\\s*\\|", "msg": "the table header must start \"| Cycle | Ticket | Delta Folder | Stitched At |\"" }],
+      "cross": ["ledger-unique-delta"]
+    },
+    "novus-automation-summary": {
+      "title": "tests/e2e/automation/<TICKET-ID>.md (Novus automation summary)",
+      "stage": "automation",
+      "source": "extensions/testing/novus-automation/novus-automation.md NA-10",
+      "path": "tests/e2e/automation/*.md",
+      "exceptPaths": ["tests/e2e/automation/*.runs.md"],
+      "scope": "story",
+      "when": "autoKey",
+      "optional": true,
+      "headings": ["^# Novus Automation — ", "^## Source$", "^## Cases$", "^## Novus Gaps$", "^## Changes This Run$"],
+      "patterns": [{ "re": "^\\|\\s*TC\\s*\\|\\s*Plan file\\s*\\|\\s*Selected\\s*\\|\\s*State\\s*\\|\\s*Reason\\s*\\|\\s*Test method\\s*\\|\\s*Locator sources\\s*\\|\\s*Case hash\\s*\\|", "msg": "the ## Cases table header must be \"| TC | Plan file | Selected | State | Reason | Test method | Locator sources | Case hash |\"" }]
+    }
+  }
+}
