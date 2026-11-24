@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="4821 Novus automation" configfailurepolicy="continue">
+    <parameter name="report-name" value="4821"/>
+    <test name="4821">
+        <classes>
+            <class name="com.tpg.automation.novustrial.t4821.T4821E2eTests"/>
+            <class name="com.tpg.automation.novustrial.t4821.T4821ApiTests"/>
+        </classes>
+    </test>
+</suite>
